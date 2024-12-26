@@ -1,6 +1,6 @@
 import { prismaClient } from "@/app/lib/db";
 import { getServerSession } from "next-auth";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod"
 
 const UpvoteSchema = z.object({
@@ -16,12 +16,44 @@ export async function POST(req: NextResponse) {
         }
     });
 
-    if (user) {
+    if (!user) {
         return NextResponse.json({
             message: "Unauthenticated"
         }, {
             status: 403
         })
     }
-    const data = UpvoteSchema.parse(await req.json());
+
+    try {
+        const data = UpvoteSchema.parse(await req.json());
+        await prismaClient.upvote.delete({
+            where: {
+                userId_streamId: {
+                    userId: user.id,
+                    streamId: data.streamId
+                }
+            }
+        });
+
+    } catch (e) {
+        return NextResponse.json({
+            message: "Error while upvoting"
+        }, {
+            status: 403
+        })
+    }
 }
+
+export async function GET(req: NextRequest) {
+    const creatorId = req.nextUrl.searchParams.get("creatorId");
+    const streams = await prismaClient.stream.findMany({
+        where: {
+            userId: creatorId ?? ""
+        }
+    })
+    
+    return NextResponse.json({
+        streams
+    })
+}
+
